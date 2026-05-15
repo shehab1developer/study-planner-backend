@@ -139,5 +139,62 @@ const getMe = async (req, res) => {
     });
   }
 };
+// update profile
+const updateProfile = async (req, res) => {
+    try {
+        const { name, email, newPassword } = req.body;
 
-module.exports = { register, login, logout, getMe };
+        const updates = {};
+
+        if (name)        updates.name  = name.trim();
+        if (email)       updates.email = email.trim().toLowerCase();
+        if (newPassword) {
+            if (newPassword.length < 6) {
+                return res.status(400).json({
+                    status:  httpStatus.FAIL,
+                    message: 'Password must be at least 6 characters',
+                });
+            }
+            updates.password = await bcrypt.hash(newPassword, 12);
+        }
+
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({
+                status:  httpStatus.FAIL,
+                message: 'No fields provided to update',
+            });
+        }
+
+        // Email uniqueness check
+        if (email) {
+            const emailTaken = await User.findOne({ email: updates.email, _id: { $ne: req.userId } });
+            if (emailTaken) {
+                return res.status(409).json({
+                    status:  httpStatus.FAIL,
+                    message: 'Email is already in use by another account',
+                });
+            }
+        }
+
+        const updatedUser = await User.findByIdAndUpdate(
+            req.userId,
+            updates,
+            { new: true, runValidators: true }
+        );
+
+        return res.status(200).json({
+            status: httpStatus.SUCCESS,
+            data: {
+                _id:        updatedUser._id,
+                name:       updatedUser.name,
+                email:      updatedUser.email,
+                role:       updatedUser.role,
+                isVerified: updatedUser.isVerified,
+            },
+        });
+    } catch (err) {
+        return res.status(500).json({ status: httpStatus.ERROR, message: err.message });
+    }
+};
+
+module.exports = { register, login, logout, getMe,updateProfile };
